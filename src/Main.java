@@ -1,45 +1,37 @@
 import java.util.*;
+import java.util.concurrent.*;
 
 public class Main {
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
         String[] texts = new String[25];
         for (int i = 0; i < texts.length; i++) {
             texts[i] = generateText("aab", 30_000);
         }
 
-        List<Thread> threads = new ArrayList<>();
         long startTs = System.currentTimeMillis(); // start time
+
+        int maxSize = 0; // результат - максимальный интервал среди всех строк
+        int threadCount = 8;  // число потоков в пуле
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        List<Future<Integer>> list = new ArrayList<Future<Integer>>();
+
+        System.out.println("Считаю результат в " + threadCount + " параллельных потоках...");
         for (String text : texts) {
-            Runnable logic = () -> {
-                int maxSize = 0;
-                for (int i = 0; i < text.length(); i++) {
-                    for (int j = 0; j < text.length(); j++) {
-                        if (i >= j) {
-                            continue;
-                        }
-                        boolean bFound = false;
-                        for (int k = i; k < j; k++) {
-                            if (text.charAt(k) == 'b') {
-                                bFound = true;
-                                break;
-                            }
-                        }
-                        if (!bFound && maxSize < j - i) {
-                            maxSize = j - i;
-                        }
-                    }
-                }
-                System.out.println(text.substring(0, 100) + " -> " + maxSize);
-            };
-            Thread thread = new Thread(logic);
-            threads.add(thread);
-            thread.start();
+            Callable<Integer> callable = new MyCallable(text); // создаем объект с аргументом - следующей строкой
+            Future<Integer> future = executor.submit(callable); // запускаем задачу в пуле потоков
+            list.add(future);
         }
-        for (Thread thread : threads) {
-            thread.join(); // зависаем, ждём когда поток объект которого лежит в thread завершится
+        for (Future<Integer> future : list) {
+            try {
+                maxSize = Math.max(maxSize, future.get());
+            } catch (ExecutionException | InterruptedException e) {
+                e.printStackTrace();
+            }
         }
 
+        executor.shutdown();
+        System.out.println("Максимальный интервал среди всех строк: " + maxSize);
         long endTs = System.currentTimeMillis(); // end time
         System.out.println("Time: " + (endTs - startTs) + "ms");
     }
